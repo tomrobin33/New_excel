@@ -213,20 +213,20 @@ def read_data_from_excel(
 ) -> str:
     """
     Read data from Excel worksheet with cell metadata including validation rules.
-    
-    Args:
-        filepath: Path to Excel file
-        sheet_name: Name of worksheet
-        start_cell: Starting cell (default A1)
-        end_cell: Ending cell (optional, auto-expands if not provided)
-        preview_only: Whether to return preview only
-    
-    Returns:  
-    JSON string containing structured cell data with validation metadata.
-    Each cell includes: address, value, row, column, and validation info (if any).
+    支持本地路径和http/https链接。
     """
+    temp_file = None
     try:
-        full_path = get_excel_path(filepath)
+        # 判断是否为URL
+        if filepath.startswith("http://") or filepath.startswith("https://"):
+            temp_file = f"/tmp/{uuid.uuid4()}.xlsx"
+            r = requests.get(filepath, stream=True)
+            with open(temp_file, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            full_path = temp_file
+        else:
+            full_path = get_excel_path(filepath)
         from excel_mcp.data import read_excel_range_with_metadata
         result = read_excel_range_with_metadata(
             full_path, 
@@ -236,14 +236,14 @@ def read_data_from_excel(
         )
         if not result or not result.get("cells"):
             return "No data found in specified range"
-            
-        # Return as formatted JSON string
         import json
         return json.dumps(result, indent=2, default=str)
-        
     except Exception as e:
         logger.error(f"Error reading data: {e}")
         raise
+    finally:
+        if temp_file and os.path.exists(temp_file):
+            os.remove(temp_file)
 
 @mcp.tool()
 def write_data_to_excel(

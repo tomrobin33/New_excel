@@ -14,3 +14,4 @@ uvicorn
 requests
 paramiko
 python-multipart
+pandas
