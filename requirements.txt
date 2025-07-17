@@ -1,0 +1,11 @@
+typer==0.16.0
+click==8.2.1
+rich==14.0.0
+pygments==2.19.2
+markdown-it-py==3.0.0
+mdurl==0.1.2
+shellingham==1.5.4
+typing-extensions==4.14.1
+colorama==0.4.6
+openpyxl>=3.1.5
+mcp[cli]>=1.10.1
