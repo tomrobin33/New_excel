@@ -9,3 +9,8 @@ typing-extensions==4.14.1
 colorama==0.4.6
 openpyxl>=3.1.5
 mcp[cli]>=1.10.1
+fastapi
+uvicorn
+requests
+paramiko
+python-multipart

@@ -34,6 +34,14 @@ from excel_mcp.sheet import (
     unmerge_range,
     get_merged_ranges,
 )
+import requests
+import paramiko
+import uuid
+from fastapi import FastAPI, Form
+import shutil
+
+app = FastAPI()
+TEMP_DIR = "/tmp"
 
 # Get project root directory path for log file path.
 # When using the stdio transmission method,
@@ -598,6 +606,36 @@ def get_data_validation_info(
     except Exception as e:
         logger.error(f"Error getting validation info: {e}")
         raise
+
+@app.post("/process_and_upload")
+def process_and_upload(url: str = Form(...)):
+    # 1. 下载文件到临时目录
+    filename = str(uuid.uuid4()) + "_" + url.split("/")[-1]
+    local_path = os.path.join(TEMP_DIR, filename)
+    r = requests.get(url, stream=True)
+    with open(local_path, 'wb') as f:
+        for chunk in r.iter_content(chunk_size=8192):
+            f.write(chunk)
+
+    # 2. 处理文件（此处为简单复制）
+    processed_filename = "processed_" + filename
+    processed_path = os.path.join(TEMP_DIR, processed_filename)
+    shutil.copy(local_path, processed_path)
+
+    # 3. 上传到远程服务器
+    remote_path = f"/root/files/{processed_filename}"
+    transport = paramiko.Transport(("8.156.74.79", 22))
+    transport.connect(username="root", password="zfsZBC123")
+    sftp = paramiko.SFTPClient.from_transport(transport)
+    if sftp is not None:
+        sftp.put(processed_path, remote_path)
+        sftp.close()
+    if transport is not None:
+        transport.close()
+
+    # 4. 返回公网下载链接
+    download_url = f"http://8.156.74.79:8001/{processed_filename}"
+    return {"download_url": download_url}
 
 async def run_sse():
     """Run Excel MCP server in SSE mode."""
