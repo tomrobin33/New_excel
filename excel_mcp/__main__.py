@@ -9,7 +9,6 @@ deps = [
     ("click", "click"),
     ("rich", "rich"),
     ("pygments", "pygments"),
-    ("markdown_it_py", "markdown_it_py"),
     ("mdurl", "mdurl"),
     ("shellingham", "shellingham"),
     ("typing_extensions", "typing_extensions"),
