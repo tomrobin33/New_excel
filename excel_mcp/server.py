@@ -210,6 +210,8 @@ def read_data_from_excel(
     Read data from Excel worksheet with cell metadata including validation rules.
     支持本地路径和http/https链接。
     """
+    import requests
+    import uuid
     temp_file = None
     try:
         # 判断是否为URL
@@ -222,6 +224,21 @@ def read_data_from_excel(
             full_path = temp_file
         else:
             full_path = get_excel_path(filepath)
+            import os
+            if not os.path.exists(full_path):
+                # 尝试将 filepath 当作 URL 再下载一次
+                if filepath.startswith("http://") or filepath.startswith("https://"):
+                    temp_file = f"/tmp/{uuid.uuid4()}.xlsx"
+                    try:
+                        r = requests.get(filepath, stream=True)
+                        with open(temp_file, 'wb') as f:
+                            for chunk in r.iter_content(chunk_size=8192):
+                                f.write(chunk)
+                        full_path = temp_file
+                    except Exception as e:
+                        return f"Error: 无法下载文件: {filepath}，原因：{e}"
+                else:
+                    return f"Error: 文件不存在: {full_path}"
         from excel_mcp.data import read_excel_range_with_metadata
         result = read_excel_range_with_metadata(
             full_path, 
