@@ -207,38 +207,21 @@ def read_data_from_excel(
     preview_only: bool = False
 ) -> str:
     """
-    Read data from Excel worksheet with cell metadata including validation rules.
-    支持本地路径和http/https链接。
+    只支持通过URL读取Excel文件，简化逻辑，避免大模型错误思考。
     """
     import requests
     import uuid
     temp_file = None
     try:
-        # 判断是否为URL
-        if filepath.startswith("http://") or filepath.startswith("https://"):
-            temp_file = f"/tmp/{uuid.uuid4()}.xlsx"
-            r = requests.get(filepath, stream=True)
-            with open(temp_file, 'wb') as f:
-                for chunk in r.iter_content(chunk_size=8192):
-                    f.write(chunk)
-            full_path = temp_file
-        else:
-            full_path = get_excel_path(filepath)
-            import os
-            if not os.path.exists(full_path):
-                # 尝试将 filepath 当作 URL 再下载一次
-                if filepath.startswith("http://") or filepath.startswith("https://"):
-                    temp_file = f"/tmp/{uuid.uuid4()}.xlsx"
-                    try:
-                        r = requests.get(filepath, stream=True)
-                        with open(temp_file, 'wb') as f:
-                            for chunk in r.iter_content(chunk_size=8192):
-                                f.write(chunk)
-                        full_path = temp_file
-                    except Exception as e:
-                        return f"Error: 无法下载文件: {filepath}，原因：{e}"
-                else:
-                    return f"Error: 文件不存在: {full_path}"
+        # 只允许URL输入
+        if not (filepath.startswith("http://") or filepath.startswith("https://")):
+            return "Error: 只支持通过URL读取Excel文件，请输入有效的http/https链接。"
+        temp_file = f"/tmp/{uuid.uuid4()}.xlsx"
+        r = requests.get(filepath, stream=True)
+        with open(temp_file, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                f.write(chunk)
+        full_path = temp_file
         from excel_mcp.data import read_excel_range_with_metadata
         result = read_excel_range_with_metadata(
             full_path, 
@@ -252,7 +235,7 @@ def read_data_from_excel(
         return json.dumps(result, indent=2, default=str)
     except Exception as e:
         logger.error(f"Error reading data: {e}")
-        raise
+        return f"Error: {e}"
     finally:
         if temp_file and os.path.exists(temp_file):
             os.remove(temp_file)
