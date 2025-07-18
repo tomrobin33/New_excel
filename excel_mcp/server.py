@@ -472,16 +472,28 @@ def get_workbook_metadata(
     filepath: str,
     include_ranges: bool = False
 ) -> str:
-    """Get metadata about workbook including sheets, ranges, etc."""
+    """只支持通过URL读取Excel文件元数据，简化逻辑。"""
+    import requests, uuid, os
+    temp_file = None
     try:
-        full_path = get_excel_path(filepath)
+        if not (filepath.startswith("http://") or filepath.startswith("https://")):
+            return "Error: 只支持通过URL读取Excel文件元数据，请输入有效的http/https链接。"
+        temp_file = f"/tmp/{uuid.uuid4()}.xlsx"
+        r = requests.get(filepath, stream=True)
+        with open(temp_file, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                f.write(chunk)
+        full_path = temp_file
         result = get_workbook_info(full_path, include_ranges=include_ranges)
         return str(result)
     except WorkbookError as e:
         return f"Error: {str(e)}"
     except Exception as e:
         logger.error(f"Error getting workbook metadata: {e}")
-        raise
+        return f"Error: {e}"
+    finally:
+        if temp_file and os.path.exists(temp_file):
+            os.remove(temp_file)
 
 @mcp.tool()
 def merge_cells(filepath: str, sheet_name: str, start_cell: str, end_cell: str) -> str:
