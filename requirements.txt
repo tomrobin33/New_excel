@@ -4,3 +4,4 @@ future==0.18.2
 macholib==1.15.2
 openpyxl==3.1.5
 six==1.15.0
+requests
