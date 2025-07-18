@@ -56,10 +56,10 @@ class ChartStyle:
 
 def create_chart_in_sheet(
     filepath: str,
-    sheet_name: str,
-    data_range: str,
-    chart_type: str,
-    target_cell: str,
+    sheet_name: Optional[str] = None,
+    data_range: str = None,
+    chart_type: str = None,
+    target_cell: str = None,
     title: str = "",
     x_axis: str = "",
     y_axis: str = "",
@@ -74,6 +74,9 @@ def create_chart_in_sheet(
         style.setdefault("show_data_labels", True)
     try:
         wb = load_workbook(filepath)
+        # 自动适应sheet_name
+        if not sheet_name:
+            sheet_name = wb.sheetnames[0]
         if sheet_name not in wb.sheetnames:
             logger.error(f"Sheet '{sheet_name}' not found")
             raise ValidationError(f"Sheet '{sheet_name}' not found")

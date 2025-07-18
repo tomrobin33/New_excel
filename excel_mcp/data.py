@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 import logging
 
 from openpyxl import load_workbook
@@ -13,8 +13,8 @@ from .cell_validation import get_data_validation_for_cell
 logger = logging.getLogger(__name__)
 
 def read_excel_range(
-    filepath: Path | str,
-    sheet_name: str,
+    filepath: Union[Path, str],
+    sheet_name: Optional[str] = None,
     start_cell: str = "A1",
     end_cell: Optional[str] = None,
     preview_only: bool = False
@@ -22,7 +22,9 @@ def read_excel_range(
     """Read data from Excel range with optional preview mode"""
     try:
         wb = load_workbook(filepath, read_only=False)
-        
+        # 自动适应sheet_name
+        if not sheet_name:
+            sheet_name = wb.sheetnames[0]
         if sheet_name not in wb.sheetnames:
             raise DataError(f"Sheet '{sheet_name}' not found")
             
@@ -91,8 +93,8 @@ def read_excel_range(
 
 def write_data(
     filepath: str,
-    sheet_name: Optional[str],
-    data: Optional[List[List]],
+    sheet_name: Optional[str] = None,
+    data: Optional[List[List]] = None,
     start_cell: str = "A1",
 ) -> Dict[str, str]:
     """Write data to Excel sheet with workbook handling
@@ -105,7 +107,7 @@ def write_data(
             
         wb = load_workbook(filepath)
 
-        # If no sheet specified, use active sheet
+        # 自动适应sheet_name
         if not sheet_name:
             active_sheet = wb.active
             if active_sheet is None:
@@ -168,8 +170,8 @@ def _write_data_to_worksheet(
         raise DataError(str(e))
 
 def read_excel_range_with_metadata(
-    filepath: Path | str,
-    sheet_name: str,
+    filepath: Union[Path, str],
+    sheet_name: Optional[str] = None,
     start_cell: str = "A1",
     end_cell: Optional[str] = None,
     include_validation: bool = True
@@ -188,7 +190,9 @@ def read_excel_range_with_metadata(
     """
     try:
         wb = load_workbook(filepath, read_only=False)
-        
+        # 自动适应sheet_name
+        if not sheet_name:
+            sheet_name = wb.sheetnames[0]
         if sheet_name not in wb.sheetnames:
             raise DataError(f"Sheet '{sheet_name}' not found")
             

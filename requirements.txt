@@ -1,17 +1,6 @@
-typer==0.16.0
-click==8.2.1
-rich==14.0.0
-pygments==2.19.2
-markdown-it-py==3.0.0
-mdurl==0.1.2
-shellingham==1.5.4
-typing-extensions==4.14.1
-colorama==0.4.6
-openpyxl>=3.1.5
-mcp[cli]>=1.10.1
-fastapi
-uvicorn
-requests
-paramiko
-python-multipart
-pandas
+altgraph @ file:///AppleInternal/Library/BuildRoots/911c829a-3bc5-11f0-9a0a-5e8e1e30ac88/Library/Caches/com.apple.xbs/Sources/python3/altgraph-0.17.2-py2.py3-none-any.whl
+et_xmlfile==2.0.0
+future @ file:///AppleInternal/Library/BuildRoots/911c829a-3bc5-11f0-9a0a-5e8e1e30ac88/Library/Caches/com.apple.xbs/Sources/python3/future-0.18.2-py3-none-any.whl
+macholib @ file:///AppleInternal/Library/BuildRoots/911c829a-3bc5-11f0-9a0a-5e8e1e30ac88/Library/Caches/com.apple.xbs/Sources/python3/macholib-1.15.2-py2.py3-none-any.whl
+openpyxl==3.1.5
+six @ file:///AppleInternal/Library/BuildRoots/911c829a-3bc5-11f0-9a0a-5e8e1e30ac88/Library/Caches/com.apple.xbs/Sources/python3/six-1.15.0-py2.py3-none-any.whl

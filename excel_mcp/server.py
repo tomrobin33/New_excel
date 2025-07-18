@@ -201,7 +201,7 @@ def format_range(
 @mcp.tool()
 def read_data_from_excel(
     filepath: str,
-    sheet_name: str,
+    sheet_name: Optional[str] = None,
     start_cell: str = "A1",
     end_cell: Optional[str] = None,
     preview_only: bool = False
@@ -243,20 +243,18 @@ def read_data_from_excel(
 @mcp.tool()
 def write_data_to_excel(
     filepath: str,
-    sheet_name: str,
-    data: List[List],
+    sheet_name: Optional[str] = None,
+    data: Optional[List[List]] = None,
     start_cell: str = "A1",
 ) -> str:
     """
     Write data to Excel worksheet.
     Excel formula will write to cell without any verification.
-
     PARAMETERS:  
     filepath: Path to Excel file
     sheet_name: Name of worksheet to write to
     data: List of lists containing data to write to the worksheet, sublists are assumed to be rows
     start_cell: Cell to start writing to, default is "A1"
-  
     """
     try:
         full_path = get_excel_path(filepath)

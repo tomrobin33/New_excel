@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional
 import logging
 
 from .workbook import get_or_create_workbook
@@ -10,9 +10,9 @@ logger = logging.getLogger(__name__)
 
 def apply_formula(
     filepath: str,
-    sheet_name: str,
-    cell: str,
-    formula: str
+    sheet_name: Optional[str] = None,
+    cell: str = None,
+    formula: str = None
 ) -> dict[str, Any]:
     """Apply any Excel formula to a cell."""
     try:
@@ -20,6 +20,9 @@ def apply_formula(
             raise ValidationError(f"Invalid cell reference: {cell}")
             
         wb = get_or_create_workbook(filepath)
+        # 自动适应sheet_name
+        if not sheet_name:
+            sheet_name = wb.sheetnames[0]
         if sheet_name not in wb.sheetnames:
             raise ValidationError(f"Sheet '{sheet_name}' not found")
             

@@ -1,5 +1,6 @@
 import uuid
 import logging
+from typing import Optional
 
 from openpyxl import load_workbook
 from openpyxl.worksheet.table import Table, TableStyleInfo
@@ -9,8 +10,8 @@ logger = logging.getLogger(__name__)
 
 def create_excel_table(
     filepath: str,
-    sheet_name: str,
-    data_range: str,
+    sheet_name: Optional[str] = None,
+    data_range: str = None,
     table_name: str | None = None,
     table_style: str = "TableStyleMedium9"
 ) -> dict:
@@ -28,6 +29,9 @@ def create_excel_table(
     """
     try:
         wb = load_workbook(filepath)
+        # 自动适应sheet_name
+        if not sheet_name:
+            sheet_name = wb.sheetnames[0]
         if sheet_name not in wb.sheetnames:
             raise DataError(f"Sheet '{sheet_name}' not found.")
             

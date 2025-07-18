@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional
 import uuid
 import logging
 
@@ -15,10 +15,10 @@ logger = logging.getLogger(__name__)
 
 def create_pivot_table(
     filepath: str,
-    sheet_name: str,
-    data_range: str,
-    rows: list[str],
-    values: list[str],
+    sheet_name: Optional[str] = None,
+    data_range: str = None,
+    rows: list[str] = None,
+    values: list[str] = None,
     columns: list[str] | None = None,
     agg_func: str = "sum"
 ) -> dict[str, Any]:
@@ -39,6 +39,9 @@ def create_pivot_table(
     """
     try:
         wb = load_workbook(filepath)
+        # 自动适应sheet_name
+        if not sheet_name:
+            sheet_name = wb.sheetnames[0]
         if sheet_name not in wb.sheetnames:
             raise ValidationError(f"Sheet '{sheet_name}' not found")
         
