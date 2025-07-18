@@ -84,12 +84,7 @@ mcp = FastMCP(
 
 def get_excel_path(filename: str) -> str:
     """Get full path to Excel file.
-    
-    Args:
-        filename: Name of Excel file
-        
-    Returns:
-        Full path to Excel file
+    支持绝对路径和相对路径（如tmp_files/xxx.xlsx）。
     """
     # If filename is already an absolute path, return it
     if os.path.isabs(filename):
@@ -97,8 +92,8 @@ def get_excel_path(filename: str) -> str:
 
     # Check if in SSE mode (EXCEL_FILES_PATH is not None)
     if EXCEL_FILES_PATH is None:
-        # Must use absolute path
-        raise ValueError(f"Invalid filename: {filename}, must be an absolute path when not in SSE mode")
+        # 支持相对路径，返回其绝对路径
+        return os.path.abspath(filename)
 
     # In SSE mode, if it's a relative path, resolve it based on EXCEL_FILES_PATH
     return os.path.join(EXCEL_FILES_PATH, filename)
