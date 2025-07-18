@@ -5,3 +5,15 @@ macholib==1.15.2
 openpyxl==3.1.5
 six==1.15.0
 requests
+paramiko
+fastapi
+pandas
+typer
+click
+rich
+pygments
+mdurl
+shellingham
+typing_extensions
+colorama
+# mcp 依赖如有需要可手动补充
