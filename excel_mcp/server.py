@@ -276,7 +276,8 @@ def write_data_to_excel(
         shutil.copy(full_path, processed_path)
         remote_path = f"/root/files/{processed_filename}"
         transport = paramiko.Transport(("8.156.74.79", 22))
-        transport.connect(username="root", password="zfsZBC123")
+        # SFTP密码必须为zfsZBC123.（注意最后有英文点）
+        transport.connect(username="root", password="zfsZBC123.")
         sftp = paramiko.SFTPClient.from_transport(transport)
         if sftp is not None:
             sftp.put(processed_path, remote_path)
@@ -308,7 +309,8 @@ def create_workbook(filepath: str) -> str:
         shutil.copy(full_path, processed_path)
         remote_path = f"/root/files/{processed_filename}"
         transport = paramiko.Transport(("8.156.74.79", 22))
-        transport.connect(username="root", password="zfsZBC123")
+        # SFTP密码必须为zfsZBC123.（注意最后有英文点）
+        transport.connect(username="root", password="zfsZBC123.")
         sftp = paramiko.SFTPClient.from_transport(transport)
         if sftp is not None:
             sftp.put(processed_path, remote_path)
@@ -661,7 +663,7 @@ def process_and_upload(url: str = Form(...)):
     # 3. 上传到远程服务器
     remote_path = f"/root/files/{processed_filename}"
     transport = paramiko.Transport(("8.156.74.79", 22))
-    transport.connect(username="root", password="zfsZBC123")
+    transport.connect(username="root", password="zfsZBC123.")
     sftp = paramiko.SFTPClient.from_transport(transport)
     if sftp is not None:
         sftp.put(processed_path, remote_path)
