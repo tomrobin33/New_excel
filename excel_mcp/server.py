@@ -240,60 +240,13 @@ def read_data_from_excel(
             os.remove(temp_file)
 
 @mcp.tool()
-def write_data_to_excel(
-    filepath: str,
-    sheet_name: Optional[str] = None,
-    data: Optional[List[List]] = None,
-    start_cell: str = "A1",
-) -> str:
-    """
-    Write data to Excel worksheet.
-    Excel formula will write to cell without any verification.
-    PARAMETERS:  
-    filepath: Path to Excel file
-    sheet_name: Name of worksheet to write to
-    data: List of lists containing data to write to the worksheet, sublists are assumed to be rows
-    start_cell: Cell to start writing to, default is "A1"
-    """
-    try:
-        full_path = get_excel_path(filepath)
-        # 写入数据
-        result = write_data(full_path, sheet_name, data, start_cell)
-        # 检查表是否为空（所有 sheet 均无数据）
-        wb = load_workbook(full_path)
-        is_empty = True
-        for ws in wb.worksheets:
-            if ws.max_row > 1 or ws.max_column > 1 or (ws.max_row == 1 and ws.max_column == 1 and ws['A1'].value not in [None, ""]):
-                is_empty = False
-                break
-        wb.close()
-        if is_empty:
-            return "Error: 表未写入任何数据，未上传。"
-        return f"{result['message']}"
-    except (ValidationError, DataError) as e:
-        return f"Error: {str(e)}"
-    except Exception as e:
-        logger.error(f"Error writing data: {e}")
-        raise
-
-@mcp.tool()
 def create_workbook(filepath: str) -> str:
-    """Create new Excel workbook and自动上传到服务器."""
+    """Create new Excel workbook. 允许先创建空表，后续写入时自动保存/上传。"""
     try:
         full_path = get_excel_path(filepath)
         from excel_mcp.workbook import create_workbook as create_workbook_impl
         create_workbook_impl(full_path)
-        # 新建后直接检测是否为空表
-        wb = load_workbook(full_path)
-        is_empty = True
-        for ws in wb.worksheets:
-            if ws.max_row > 1 or ws.max_column > 1 or (ws.max_row == 1 and ws.max_column == 1 and ws['A1'].value not in [None, ""]):
-                is_empty = False
-                break
-        wb.close()
-        if is_empty:
-            return "Error: 新建表为空，未上传。"
-        return f"Created workbook at {full_path}"
+        return f"Created workbook at {full_path} (空表，待写入数据后自动上传)"
     except WorkbookError as e:
         return f"Error: {str(e)}"
     except Exception as e:
@@ -302,12 +255,12 @@ def create_workbook(filepath: str) -> str:
 
 @mcp.tool()
 def create_worksheet(filepath: str, sheet_name: str) -> str:
-    """Create new worksheet in workbook."""
+    """Create new worksheet in workbook. 允许先创建空表，后续写入时自动保存/上传。"""
     try:
         full_path = get_excel_path(filepath)
         from excel_mcp.workbook import create_sheet as create_worksheet_impl
         result = create_worksheet_impl(full_path, sheet_name)
-        return result["message"]
+        return result["message"] + " (空表，待写入数据后自动上传)"
     except (ValidationError, WorkbookError) as e:
         return f"Error: {str(e)}"
     except Exception as e:
