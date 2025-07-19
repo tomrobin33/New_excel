@@ -37,6 +37,7 @@ from excel_mcp.sheet import (
 import requests
 import uuid
 from fastapi import FastAPI, Form
+from openpyxl import load_workbook
 
 app = FastAPI()
 TEMP_DIR = "/tmp"
@@ -256,7 +257,18 @@ def write_data_to_excel(
     """
     try:
         full_path = get_excel_path(filepath)
+        # 写入数据
         result = write_data(full_path, sheet_name, data, start_cell)
+        # 检查表是否为空（所有 sheet 均无数据）
+        wb = load_workbook(full_path)
+        is_empty = True
+        for ws in wb.worksheets:
+            if ws.max_row > 1 or ws.max_column > 1 or (ws.max_row == 1 and ws.max_column == 1 and ws['A1'].value not in [None, ""]):
+                is_empty = False
+                break
+        wb.close()
+        if is_empty:
+            return "Error: 表未写入任何数据，未上传。"
         return f"{result['message']}"
     except (ValidationError, DataError) as e:
         return f"Error: {str(e)}"
@@ -271,6 +283,16 @@ def create_workbook(filepath: str) -> str:
         full_path = get_excel_path(filepath)
         from excel_mcp.workbook import create_workbook as create_workbook_impl
         create_workbook_impl(full_path)
+        # 新建后直接检测是否为空表
+        wb = load_workbook(full_path)
+        is_empty = True
+        for ws in wb.worksheets:
+            if ws.max_row > 1 or ws.max_column > 1 or (ws.max_row == 1 and ws.max_column == 1 and ws['A1'].value not in [None, ""]):
+                is_empty = False
+                break
+        wb.close()
+        if is_empty:
+            return "Error: 新建表为空，未上传。"
         return f"Created workbook at {full_path}"
     except WorkbookError as e:
         return f"Error: {str(e)}"
