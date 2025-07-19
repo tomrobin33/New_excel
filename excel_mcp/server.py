@@ -38,6 +38,8 @@ import requests
 import uuid
 from fastapi import FastAPI, Form
 from openpyxl import load_workbook
+import paramiko
+import shutil
 
 app = FastAPI()
 TEMP_DIR = "/tmp"
@@ -632,7 +634,21 @@ def write_data_to_excel(
             wb.close()
         # 写入数据
         result = write_data(full_path, sheet_name, data, start_cell)
-        return f"{result['message']}"
+        # 自动上传到服务器
+        processed_filename = f"uploaded_{uuid.uuid4().hex}.xlsx"
+        processed_path = os.path.join("/tmp", processed_filename)
+        shutil.copy(full_path, processed_path)
+        remote_path = f"/root/files/{processed_filename}"
+        transport = paramiko.Transport(("8.154.74.79", 22))
+        transport.connect(username="root", password="zfsZBC123.")
+        sftp = paramiko.SFTPClient.from_transport(transport)
+        if sftp is not None:
+            sftp.put(processed_path, remote_path)
+            sftp.close()
+        if transport is not None:
+            transport.close()
+        download_url = f"http://8.154.74.79:8001/{processed_filename}"
+        return f"{result['message']}\n公网下载链接: {download_url}"
     except (ValidationError, DataError) as e:
         return f"Error: {str(e)}"
     except Exception as e:
