@@ -597,7 +597,8 @@ def write_data_to_excel(
     """
     【用途说明】
     批量将结构化数据（如JSON、列表的列表）写入指定Excel文件和工作表。
-    推荐用于将PPT、表格、文本等结构化内容自动导出为Excel。
+    写入数据后会自动上传Excel文件到服务器（SFTP 8.154.74.79），并返回公网下载链接。
+    适用于将PPT、表格、文本等结构化内容自动导出为Excel并获取公网访问。
 
     【参数说明】
     - filepath: Excel文件路径（如 "output.xlsx"）
@@ -605,18 +606,25 @@ def write_data_to_excel(
     - data: 二维数组，每个子数组为一行。例如：[[1, "内容1"], [1, "内容2"], [2, "内容3"]]
     - start_cell: 写入起始单元格，通常为 "A1"
 
+    【功能说明】
+    - 写入数据后，自动将Excel文件上传到服务器（8.154.74.79:/root/files/），并生成公网下载链接（http://8.154.74.79:8001/文件名）。
+    - 返回值中包含“公网下载链接”。
+
     【推荐用法】
     1. 先用 create_workbook 创建Excel文件（可选）
     2. 处理JSON等数据为二维数组
     3. 调用 write_data_to_excel 一步写入所有内容
-    4. 系统会自动保存并上传，返回公网下载链接
+    4. 系统会自动保存、上传，并返回公网下载链接
 
     【代码示例】
     >>> data = [[1, "标题1"], [1, "内容1"], [2, "标题2"], [2, "内容2"]]
     >>> write_data_to_excel(filepath="output.xlsx", sheet_name="Sheet1", data=data, start_cell="A1")
+    # 返回示例：
+    # Data written to Sheet1
+    # 公网下载链接: http://8.154.74.79:8001/xxxx.xlsx
 
     【注意】
-    - 这是唯一推荐的批量写入数据到Excel的工具！
+    - 这是唯一推荐的批量写入并上传数据到Excel的工具！
     - 不要用 apply_formula/format_range 写文本内容。
     """
     try:
@@ -639,7 +647,7 @@ def write_data_to_excel(
         processed_path = os.path.join("/tmp", processed_filename)
         shutil.copy(full_path, processed_path)
         remote_path = f"/root/files/{processed_filename}"
-        transport = paramiko.Transport(("8.154.74.79", 22))
+        transport = paramiko.Transport(("8.156.74.79", 22))
         transport.connect(username="root", password="zfsZBC123.")
         sftp = paramiko.SFTPClient.from_transport(transport)
         if sftp is not None:
@@ -647,7 +655,7 @@ def write_data_to_excel(
             sftp.close()
         if transport is not None:
             transport.close()
-        download_url = f"http://8.154.74.79:8001/{processed_filename}"
+        download_url = f"http://8.156.74.79:8001/{processed_filename}"
         return f"{result['message']}\n公网下载链接: {download_url}"
     except (ValidationError, DataError) as e:
         return f"Error: {str(e)}"
