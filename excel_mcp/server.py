@@ -585,6 +585,60 @@ def get_data_validation_info(
         logger.error(f"Error getting validation info: {e}")
         raise
 
+@mcp.tool()
+def write_data_to_excel(
+    filepath: str,
+    sheet_name: Optional[str] = None,
+    data: Optional[List[List]] = None,
+    start_cell: str = "A1",
+) -> str:
+    """
+    【用途说明】
+    批量将结构化数据（如JSON、列表的列表）写入指定Excel文件和工作表。
+    推荐用于将PPT、表格、文本等结构化内容自动导出为Excel。
+
+    【参数说明】
+    - filepath: Excel文件路径（如 "output.xlsx"）
+    - sheet_name: 工作表名称（如 "Sheet1"，可选，默认第一个sheet）
+    - data: 二维数组，每个子数组为一行。例如：[[1, "内容1"], [1, "内容2"], [2, "内容3"]]
+    - start_cell: 写入起始单元格，通常为 "A1"
+
+    【推荐用法】
+    1. 先用 create_workbook 创建Excel文件（可选）
+    2. 处理JSON等数据为二维数组
+    3. 调用 write_data_to_excel 一步写入所有内容
+    4. 系统会自动保存并上传，返回公网下载链接
+
+    【代码示例】
+    >>> data = [[1, "标题1"], [1, "内容1"], [2, "标题2"], [2, "内容2"]]
+    >>> write_data_to_excel(filepath="output.xlsx", sheet_name="Sheet1", data=data, start_cell="A1")
+
+    【注意】
+    - 这是唯一推荐的批量写入数据到Excel的工具！
+    - 不要用 apply_formula/format_range 写文本内容。
+    """
+    try:
+        full_path = get_excel_path(filepath)
+        # 如果文件不存在，自动创建
+        if not os.path.exists(full_path):
+            from excel_mcp.workbook import create_workbook as create_workbook_impl
+            create_workbook_impl(full_path)
+        # 如果sheet不存在，自动创建
+        from openpyxl import load_workbook
+        wb = load_workbook(full_path)
+        if sheet_name and sheet_name not in wb.sheetnames:
+            wb.create_sheet(sheet_name)
+            wb.save(full_path)
+            wb.close()
+        # 写入数据
+        result = write_data(full_path, sheet_name, data, start_cell)
+        return f"{result['message']}"
+    except (ValidationError, DataError) as e:
+        return f"Error: {str(e)}"
+    except Exception as e:
+        logger.error(f"Error writing data: {e}")
+        raise
+
 async def run_sse():
     """Run Excel MCP server in SSE mode."""
     # Assign value to EXCEL_FILES_PATH in SSE mode
