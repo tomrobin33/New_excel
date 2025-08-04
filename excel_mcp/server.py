@@ -205,10 +205,13 @@ def read_data_from_excel(
     sheet_name: Optional[str] = None,
     start_cell: str = "A1",
     end_cell: Optional[str] = None,
-    preview_only: bool = False
+    preview_only: bool = False,
+    max_rows: int = 100,  # 添加行数限制
+    max_cells: int = 1000  # 添加单元格数量限制
 ) -> str:
     """
     只支持通过URL读取Excel文件，简化逻辑，避免大模型错误思考。
+    添加了数据大小限制，防止返回过大的数据块。
     """
     import requests
     import uuid
@@ -217,6 +220,11 @@ def read_data_from_excel(
         # 只允许URL输入
         if not (filepath.startswith("http://") or filepath.startswith("https://")):
             return "Error: 只支持通过URL读取Excel文件，请输入有效的http/https链接。"
+        
+        # 验证参数
+        if max_rows <= 0 or max_cells <= 0:
+            return "Error: max_rows 和 max_cells 必须大于0"
+        
         temp_file = f"/tmp/{uuid.uuid4()}.xlsx"
         r = requests.get(filepath, stream=True)
         with open(temp_file, 'wb') as f:
@@ -232,10 +240,111 @@ def read_data_from_excel(
         )
         if not result or not result.get("cells"):
             return "No data found in specified range"
+        
+        # 限制返回的数据大小
+        cells = result.get("cells", [])
+        if len(cells) > max_cells:
+            cells = cells[:max_cells]
+            result["cells"] = cells
+            result["truncated"] = True
+            result["total_cells"] = len(cells)
+            result["max_cells_limit"] = max_cells
+        
+        # 限制行数
+        if len(cells) > max_rows * 10:  # 假设每行最多10列
+            cells = cells[:max_rows * 10]
+            result["cells"] = cells
+            result["truncated"] = True
+            result["max_rows_limit"] = max_rows
+        
         import json
-        return json.dumps(result, indent=2, default=str)
+        json_result = json.dumps(result, indent=2, default=str)
+        
+        # 检查JSON大小
+        if len(json_result) > 50000:  # 50KB限制
+            # 返回简化版本
+            simplified_result = {
+                "range": result.get("range", ""),
+                "sheet_name": result.get("sheet_name", ""),
+                "total_cells": len(cells),
+                "preview_cells": cells[:10],  # 只返回前10个单元格作为预览
+                "message": f"数据过大，已截断。总共{len(cells)}个单元格，只显示前10个作为预览。"
+            }
+            return json.dumps(simplified_result, indent=2, default=str)
+        
+        return json_result
     except Exception as e:
         logger.error(f"Error reading data: {e}")
+        return f"Error: {e}"
+    finally:
+        if temp_file and os.path.exists(temp_file):
+            os.remove(temp_file)
+
+@mcp.tool()
+def preview_excel_data(
+    filepath: str,
+    sheet_name: Optional[str] = None,
+    start_cell: str = "A1",
+    end_cell: Optional[str] = None,
+    max_preview_rows: int = 5,
+    max_preview_cols: int = 5
+) -> str:
+    """
+    预览Excel文件数据，返回小规模的数据样本。
+    适用于快速查看文件结构和内容，避免返回过大的数据块。
+    """
+    import requests
+    import uuid
+    temp_file = None
+    try:
+        # 只允许URL输入
+        if not (filepath.startswith("http://") or filepath.startswith("https://")):
+            return "Error: 只支持通过URL读取Excel文件，请输入有效的http/https链接。"
+        
+        temp_file = f"/tmp/{uuid.uuid4()}.xlsx"
+        r = requests.get(filepath, stream=True)
+        with open(temp_file, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                f.write(chunk)
+        full_path = temp_file
+        
+        from openpyxl import load_workbook
+        wb = load_workbook(full_path, read_only=True)
+        
+        # 自动适应sheet_name
+        if not sheet_name:
+            sheet_name = wb.sheetnames[0]
+        if sheet_name not in wb.sheetnames:
+            return f"Error: Sheet '{sheet_name}' not found"
+            
+        ws = wb[sheet_name]
+        
+        # 获取工作表信息
+        sheet_info = {
+            "sheet_name": sheet_name,
+            "total_rows": ws.max_row,
+            "total_columns": ws.max_column,
+            "preview_data": []
+        }
+        
+        # 生成预览数据
+        preview_rows = min(max_preview_rows, ws.max_row)
+        preview_cols = min(max_preview_cols, ws.max_column)
+        
+        for row in range(1, preview_rows + 1):
+            row_data = []
+            for col in range(1, preview_cols + 1):
+                cell_value = ws.cell(row=row, column=col).value
+                row_data.append(str(cell_value) if cell_value is not None else "")
+            sheet_info["preview_data"].append(row_data)
+        
+        wb.close()
+        
+        import json
+        return json.dumps(sheet_info, indent=2, default=str)
+        
+    except Exception as e:
+        logger.error(f"Error previewing data: {e}")
         return f"Error: {e}"
     finally:
         if temp_file and os.path.exists(temp_file):
@@ -407,7 +516,8 @@ def rename_worksheet(
 @mcp.tool()
 def get_workbook_metadata(
     filepath: str,
-    include_ranges: bool = False
+    include_ranges: bool = False,
+    max_sheets_info: int = 10  # 添加工作表信息限制
 ) -> str:
     """只支持通过URL读取Excel文件元数据，简化逻辑。"""
     import requests, uuid, os
@@ -422,7 +532,28 @@ def get_workbook_metadata(
                 f.write(chunk)
         full_path = temp_file
         result = get_workbook_info(full_path, include_ranges=include_ranges)
-        return str(result)
+        
+        # 限制返回的工作表信息数量
+        if isinstance(result, dict) and "sheets" in result:
+            sheets = result["sheets"]
+            if len(sheets) > max_sheets_info:
+                result["sheets"] = sheets[:max_sheets_info]
+                result["truncated"] = True
+                result["total_sheets"] = len(sheets)
+                result["max_sheets_limit"] = max_sheets_info
+        
+        result_str = str(result)
+        
+        # 检查结果大小
+        if len(result_str) > 10000:  # 10KB限制
+            simplified_result = {
+                "message": "元数据过大，已截断",
+                "total_size": len(result_str),
+                "preview": result_str[:1000] + "..." if len(result_str) > 1000 else result_str
+            }
+            return str(simplified_result)
+        
+        return result_str
     except WorkbookError as e:
         return f"Error: {str(e)}"
     except Exception as e:
@@ -662,6 +793,238 @@ def write_data_to_excel(
     except Exception as e:
         logger.error(f"Error writing data: {e}")
         raise
+
+@mcp.tool()
+def read_excel_data_in_batches(
+    filepath: str,
+    sheet_name: Optional[str] = None,
+    batch_size: int = 50,
+    start_row: int = 1,
+    end_row: Optional[int] = None,
+    columns: Optional[List[str]] = None
+) -> str:
+    """
+    分批读取Excel文件数据，避免一次性读取大量数据导致"Chunk too big"错误。
+    
+    【参数说明】
+    - filepath: Excel文件URL
+    - sheet_name: 工作表名称（可选）
+    - batch_size: 每批读取的行数（默认50行）
+    - start_row: 开始读取的行号（默认1）
+    - end_row: 结束读取的行号（可选，默认读取到文件末尾）
+    - columns: 要读取的列（可选，默认读取所有列）
+    
+    【返回值】
+    返回当前批次的数据和下一批次的读取信息，便于大模型进行分批处理。
+    
+    【使用示例】
+    1. 第一次调用：read_excel_data_in_batches(filepath="url", batch_size=50)
+    2. 根据返回的next_batch_info继续读取下一批
+    3. 重复直到读取完所有数据
+    """
+    import requests
+    import uuid
+    temp_file = None
+    try:
+        # 只允许URL输入
+        if not (filepath.startswith("http://") or filepath.startswith("https://")):
+            return "Error: 只支持通过URL读取Excel文件，请输入有效的http/https链接。"
+        
+        # 验证参数
+        if batch_size <= 0:
+            return "Error: batch_size 必须大于0"
+        if start_row <= 0:
+            return "Error: start_row 必须大于0"
+        
+        temp_file = f"/tmp/{uuid.uuid4()}.xlsx"
+        r = requests.get(filepath, stream=True)
+        with open(temp_file, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                f.write(chunk)
+        full_path = temp_file
+        
+        from openpyxl import load_workbook
+        wb = load_workbook(full_path, read_only=True)
+        
+        # 自动适应sheet_name
+        if not sheet_name:
+            sheet_name = wb.sheetnames[0]
+        if sheet_name not in wb.sheetnames:
+            return f"Error: Sheet '{sheet_name}' not found"
+            
+        ws = wb[sheet_name]
+        
+        # 确定读取范围
+        max_row = ws.max_row
+        if end_row is None:
+            end_row = max_row
+        else:
+            end_row = min(end_row, max_row)
+        
+        # 计算当前批次的范围
+        current_end_row = min(start_row + batch_size - 1, end_row)
+        
+        # 读取当前批次数据
+        batch_data = []
+        for row in range(start_row, current_end_row + 1):
+            row_data = []
+            for col in range(1, ws.max_column + 1):
+                cell_value = ws.cell(row=row, column=col).value
+                row_data.append(str(cell_value) if cell_value is not None else "")
+            batch_data.append(row_data)
+        
+        wb.close()
+        
+        # 构建返回结果
+        result = {
+            "filepath": filepath,
+            "sheet_name": sheet_name,
+            "batch_info": {
+                "current_batch": {
+                    "start_row": start_row,
+                    "end_row": current_end_row,
+                    "rows_count": len(batch_data)
+                },
+                "total_progress": {
+                    "total_rows": end_row - start_row + 1,
+                    "read_rows": current_end_row - start_row + 1,
+                    "remaining_rows": max(0, end_row - current_end_row)
+                }
+            },
+            "data": batch_data
+        }
+        
+        # 如果还有更多数据，提供下一批次的读取信息
+        if current_end_row < end_row:
+            result["next_batch_info"] = {
+                "start_row": current_end_row + 1,
+                "end_row": end_row,
+                "remaining_batches": (end_row - current_end_row) // batch_size + 1
+            }
+            result["message"] = f"已读取第{start_row}到{current_end_row}行，共{len(batch_data)}行数据。还有{result['next_batch_info']['remaining_batches']}批数据待读取。"
+        else:
+            result["message"] = f"已读取完所有数据，共{len(batch_data)}行。"
+        
+        import json
+        return json.dumps(result, indent=2, default=str)
+        
+    except Exception as e:
+        logger.error(f"Error reading data in batches: {e}")
+        return f"Error: {e}"
+    finally:
+        if temp_file and os.path.exists(temp_file):
+            os.remove(temp_file)
+
+@mcp.tool()
+def get_excel_file_info(
+    filepath: str,
+    sheet_name: Optional[str] = None
+) -> str:
+    """
+    获取Excel文件的基本信息，帮助制定分批读取策略。
+    
+    【返回信息】
+    - 文件大小
+    - 工作表数量
+    - 指定工作表的总行数和列数
+    - 建议的批次大小
+    - 预估的总批次数
+    
+    【用途】
+    在开始分批读取前，先获取文件信息，制定合适的读取策略。
+    """
+    import requests
+    import uuid
+    temp_file = None
+    try:
+        # 只允许URL输入
+        if not (filepath.startswith("http://") or filepath.startswith("https://")):
+            return "Error: 只支持通过URL读取Excel文件，请输入有效的http/https链接。"
+        
+        temp_file = f"/tmp/{uuid.uuid4()}.xlsx"
+        r = requests.get(filepath, stream=True)
+        file_size = 0
+        with open(temp_file, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                f.write(chunk)
+                file_size += len(chunk)
+        full_path = temp_file
+        
+        from openpyxl import load_workbook
+        wb = load_workbook(full_path, read_only=True)
+        
+        # 获取所有工作表信息
+        sheets_info = []
+        for sheet in wb.sheetnames:
+            ws = wb[sheet]
+            sheets_info.append({
+                "name": sheet,
+                "rows": ws.max_row,
+                "columns": ws.max_column,
+                "estimated_size_kb": (ws.max_row * ws.max_column * 50) // 1024  # 粗略估算
+            })
+        
+        # 获取指定工作表信息
+        target_sheet_info = None
+        if not sheet_name:
+            sheet_name = wb.sheetnames[0]
+        
+        if sheet_name in wb.sheetnames:
+            ws = wb[sheet_name]
+            target_sheet_info = {
+                "name": sheet_name,
+                "rows": ws.max_row,
+                "columns": ws.max_column,
+                "estimated_size_kb": (ws.max_row * ws.max_column * 50) // 1024
+            }
+        
+        wb.close()
+        
+        # 计算建议的批次大小
+        if target_sheet_info:
+            total_cells = target_sheet_info["rows"] * target_sheet_info["columns"]
+            if total_cells > 10000:
+                suggested_batch_size = 20
+            elif total_cells > 5000:
+                suggested_batch_size = 50
+            elif total_cells > 1000:
+                suggested_batch_size = 100
+            else:
+                suggested_batch_size = 200
+            
+            estimated_batches = (target_sheet_info["rows"] + suggested_batch_size - 1) // suggested_batch_size
+        else:
+            suggested_batch_size = 50
+            estimated_batches = 0
+        
+        result = {
+            "file_info": {
+                "filepath": filepath,
+                "file_size_bytes": file_size,
+                "file_size_mb": round(file_size / (1024 * 1024), 2)
+            },
+            "workbook_info": {
+                "total_sheets": len(wb.sheetnames),
+                "sheet_names": wb.sheetnames,
+                "sheets_info": sheets_info
+            },
+            "target_sheet_info": target_sheet_info,
+            "reading_strategy": {
+                "suggested_batch_size": suggested_batch_size,
+                "estimated_batches": estimated_batches,
+                "recommendation": f"建议使用{suggested_batch_size}行作为批次大小，预计需要{estimated_batches}次读取完成。"
+            }
+        }
+        
+        import json
+        return json.dumps(result, indent=2, default=str)
+        
+    except Exception as e:
+        logger.error(f"Error getting file info: {e}")
+        return f"Error: {e}"
+    finally:
+        if temp_file and os.path.exists(temp_file):
+            os.remove(temp_file)
 
 async def run_sse():
     """Run Excel MCP server in SSE mode."""
