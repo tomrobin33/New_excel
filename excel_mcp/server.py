@@ -226,10 +226,38 @@ def read_data_from_excel(
             return "Error: max_rows 和 max_cells 必须大于0"
         
         temp_file = f"/tmp/{uuid.uuid4()}.xlsx"
-        r = requests.get(filepath, stream=True)
+        
+        # 添加请求头和超时设置
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        r = requests.get(filepath, stream=True, headers=headers, timeout=30)
+        
+        # 检查HTTP状态码
+        if r.status_code != 200:
+            return f"Error: 无法下载文件，HTTP状态码: {r.status_code}"
+        
+        # 下载文件
+        file_size = 0
         with open(temp_file, 'wb') as f:
             for chunk in r.iter_content(chunk_size=8192):
-                f.write(chunk)
+                if chunk:  # 过滤掉keep-alive新块
+                    f.write(chunk)
+                    file_size += len(chunk)
+        
+        # 检查文件大小
+        if file_size == 0:
+            return "Error: 下载的文件为空"
+        
+        # 验证文件是否为有效的Excel文件
+        try:
+            from openpyxl import load_workbook
+            wb = load_workbook(temp_file, read_only=True)
+            wb.close()
+        except Exception as excel_error:
+            return f"Error: 文件不是有效的Excel文件 - {str(excel_error)}"
+        
         full_path = temp_file
         from excel_mcp.data import read_excel_range_with_metadata
         result = read_excel_range_with_metadata(
@@ -273,6 +301,8 @@ def read_data_from_excel(
             return json.dumps(simplified_result, indent=2, default=str)
         
         return json_result
+    except requests.exceptions.RequestException as e:
+        return f"Error: 网络请求失败 - {str(e)}"
     except Exception as e:
         logger.error(f"Error reading data: {e}")
         return f"Error: {e}"
@@ -302,14 +332,36 @@ def preview_excel_data(
             return "Error: 只支持通过URL读取Excel文件，请输入有效的http/https链接。"
         
         temp_file = f"/tmp/{uuid.uuid4()}.xlsx"
-        r = requests.get(filepath, stream=True)
+        
+        # 添加请求头和超时设置
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        r = requests.get(filepath, stream=True, headers=headers, timeout=30)
+        
+        # 检查HTTP状态码
+        if r.status_code != 200:
+            return f"Error: 无法下载文件，HTTP状态码: {r.status_code}"
+        
+        # 下载文件
+        file_size = 0
         with open(temp_file, 'wb') as f:
             for chunk in r.iter_content(chunk_size=8192):
-                f.write(chunk)
-        full_path = temp_file
+                if chunk:  # 过滤掉keep-alive新块
+                    f.write(chunk)
+                    file_size += len(chunk)
         
-        from openpyxl import load_workbook
-        wb = load_workbook(full_path, read_only=True)
+        # 检查文件大小
+        if file_size == 0:
+            return "Error: 下载的文件为空"
+        
+        # 验证文件是否为有效的Excel文件
+        try:
+            from openpyxl import load_workbook
+            wb = load_workbook(temp_file, read_only=True)
+        except Exception as excel_error:
+            return f"Error: 文件不是有效的Excel文件 - {str(excel_error)}"
         
         # 自动适应sheet_name
         if not sheet_name:
@@ -343,6 +395,8 @@ def preview_excel_data(
         import json
         return json.dumps(sheet_info, indent=2, default=str)
         
+    except requests.exceptions.RequestException as e:
+        return f"Error: 网络请求失败 - {str(e)}"
     except Exception as e:
         logger.error(f"Error previewing data: {e}")
         return f"Error: {e}"
@@ -525,11 +579,45 @@ def get_workbook_metadata(
     try:
         if not (filepath.startswith("http://") or filepath.startswith("https://")):
             return "Error: 只支持通过URL读取Excel文件元数据，请输入有效的http/https链接。"
+        
         temp_file = f"/tmp/{uuid.uuid4()}.xlsx"
-        r = requests.get(filepath, stream=True)
+        
+        # 添加请求头和超时设置
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        r = requests.get(filepath, stream=True, headers=headers, timeout=30)
+        
+        # 检查HTTP状态码
+        if r.status_code != 200:
+            return f"Error: 无法下载文件，HTTP状态码: {r.status_code}"
+        
+        # 检查Content-Type
+        content_type = r.headers.get('content-type', '').lower()
+        if 'excel' not in content_type and 'spreadsheet' not in content_type and 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' not in content_type:
+            logger.warning(f"Content-Type不是Excel文件: {content_type}")
+        
+        # 下载文件
+        file_size = 0
         with open(temp_file, 'wb') as f:
             for chunk in r.iter_content(chunk_size=8192):
-                f.write(chunk)
+                if chunk:  # 过滤掉keep-alive新块
+                    f.write(chunk)
+                    file_size += len(chunk)
+        
+        # 检查文件大小
+        if file_size == 0:
+            return "Error: 下载的文件为空"
+        
+        # 验证文件是否为有效的Excel文件
+        try:
+            from openpyxl import load_workbook
+            wb = load_workbook(temp_file, read_only=True)
+            wb.close()
+        except Exception as excel_error:
+            return f"Error: 文件不是有效的Excel文件 - {str(excel_error)}"
+        
         full_path = temp_file
         result = get_workbook_info(full_path, include_ranges=include_ranges)
         
@@ -554,6 +642,8 @@ def get_workbook_metadata(
             return str(simplified_result)
         
         return result_str
+    except requests.exceptions.RequestException as e:
+        return f"Error: 网络请求失败 - {str(e)}"
     except WorkbookError as e:
         return f"Error: {str(e)}"
     except Exception as e:
@@ -837,14 +927,36 @@ def read_excel_data_in_batches(
             return "Error: start_row 必须大于0"
         
         temp_file = f"/tmp/{uuid.uuid4()}.xlsx"
-        r = requests.get(filepath, stream=True)
+        
+        # 添加请求头和超时设置
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        r = requests.get(filepath, stream=True, headers=headers, timeout=30)
+        
+        # 检查HTTP状态码
+        if r.status_code != 200:
+            return f"Error: 无法下载文件，HTTP状态码: {r.status_code}"
+        
+        # 下载文件
+        file_size = 0
         with open(temp_file, 'wb') as f:
             for chunk in r.iter_content(chunk_size=8192):
-                f.write(chunk)
-        full_path = temp_file
+                if chunk:  # 过滤掉keep-alive新块
+                    f.write(chunk)
+                    file_size += len(chunk)
         
-        from openpyxl import load_workbook
-        wb = load_workbook(full_path, read_only=True)
+        # 检查文件大小
+        if file_size == 0:
+            return "Error: 下载的文件为空"
+        
+        # 验证文件是否为有效的Excel文件
+        try:
+            from openpyxl import load_workbook
+            wb = load_workbook(temp_file, read_only=True)
+        except Exception as excel_error:
+            return f"Error: 文件不是有效的Excel文件 - {str(excel_error)}"
         
         # 自动适应sheet_name
         if not sheet_name:
@@ -908,6 +1020,8 @@ def read_excel_data_in_batches(
         import json
         return json.dumps(result, indent=2, default=str)
         
+    except requests.exceptions.RequestException as e:
+        return f"Error: 网络请求失败 - {str(e)}"
     except Exception as e:
         logger.error(f"Error reading data in batches: {e}")
         return f"Error: {e}"
@@ -942,16 +1056,36 @@ def get_excel_file_info(
             return "Error: 只支持通过URL读取Excel文件，请输入有效的http/https链接。"
         
         temp_file = f"/tmp/{uuid.uuid4()}.xlsx"
-        r = requests.get(filepath, stream=True)
+        
+        # 添加请求头和超时设置
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        r = requests.get(filepath, stream=True, headers=headers, timeout=30)
+        
+        # 检查HTTP状态码
+        if r.status_code != 200:
+            return f"Error: 无法下载文件，HTTP状态码: {r.status_code}"
+        
+        # 下载文件
         file_size = 0
         with open(temp_file, 'wb') as f:
             for chunk in r.iter_content(chunk_size=8192):
-                f.write(chunk)
-                file_size += len(chunk)
-        full_path = temp_file
+                if chunk:  # 过滤掉keep-alive新块
+                    f.write(chunk)
+                    file_size += len(chunk)
         
-        from openpyxl import load_workbook
-        wb = load_workbook(full_path, read_only=True)
+        # 检查文件大小
+        if file_size == 0:
+            return "Error: 下载的文件为空"
+        
+        # 验证文件是否为有效的Excel文件
+        try:
+            from openpyxl import load_workbook
+            wb = load_workbook(temp_file, read_only=True)
+        except Exception as excel_error:
+            return f"Error: 文件不是有效的Excel文件 - {str(excel_error)}"
         
         # 获取所有工作表信息
         sheets_info = []
@@ -1019,6 +1153,8 @@ def get_excel_file_info(
         import json
         return json.dumps(result, indent=2, default=str)
         
+    except requests.exceptions.RequestException as e:
+        return f"Error: 网络请求失败 - {str(e)}"
     except Exception as e:
         logger.error(f"Error getting file info: {e}")
         return f"Error: {e}"
