@@ -40,6 +40,7 @@ from fastapi import FastAPI, Form
 from openpyxl import load_workbook
 import paramiko
 import shutil
+import tempfile
 
 app = FastAPI()
 TEMP_DIR = "/tmp"
@@ -1161,6 +1162,212 @@ def get_excel_file_info(
     finally:
         if temp_file and os.path.exists(temp_file):
             os.remove(temp_file)
+
+@mcp.tool()
+def extract_tables_from_document(
+    document_url: str,
+    output_filename: str = None,
+    auto_upload: bool = True
+) -> str:
+    """
+    从PPT、Word、PDF文档中提取表格数据并转换为Excel格式。
+    
+    【功能说明】
+    - 支持从PPT(.pptx/.ppt)、Word(.docx/.doc)、PDF(.pdf)文件中提取表格
+    - 自动识别文档中的表格结构
+    - 将提取的表格保存为Excel文件，每个表格创建一个工作表
+    - 可选择自动上传到服务器并返回公网下载链接
+    
+    【参数说明】
+    - document_url: 文档的URL地址（必须是以http://或https://开头的有效链接）
+    - output_filename: 输出的Excel文件名（可选，默认自动生成）
+    - auto_upload: 是否自动上传到服务器（默认True）
+    
+    【支持的文件格式】
+    - PPT: .pptx, .ppt
+    - Word: .docx, .doc  
+    - PDF: .pdf
+    
+    【返回值】
+    - 成功时返回提取结果和Excel文件信息
+    - 如果auto_upload=True，还会返回公网下载链接
+    - 失败时返回错误信息
+    
+    【使用示例】
+    >>> extract_tables_from_document(
+    ...     document_url="https://example.com/presentation.pptx",
+    ...     output_filename="extracted_tables.xlsx"
+    ... )
+    
+    【注意事项】
+    - 需要安装相应的文档处理库（python-pptx, python-docx, pdfplumber等）
+    - 大文件处理可能需要较长时间
+    - PDF表格提取效果取决于PDF的格式和结构
+    """
+    try:
+        # 验证URL格式
+        if not (document_url.startswith("http://") or document_url.startswith("https://")):
+            return "Error: 请输入有效的http/https链接"
+        
+        # 导入文档提取模块
+        from excel_mcp.document_extractor import extract_tables_from_document_url
+        
+        # 提取表格
+        result = extract_tables_from_document_url(document_url, output_filename)
+        
+        if not result['success']:
+            return f"Error: {result['message']}"
+        
+        # 如果启用自动上传
+        if auto_upload and result.get('output_file'):
+            try:
+                # 生成上传文件名
+                uploaded_filename = f"extracted_{uuid.uuid4().hex}.xlsx"
+                uploaded_path = os.path.join(tempfile.gettempdir(), uploaded_filename)
+                
+                # 复制文件到临时目录
+                import shutil
+                shutil.copy(result['output_file'], uploaded_path)
+                
+                # 上传到服务器
+                remote_path = f"/root/files/{uploaded_filename}"
+                transport = paramiko.Transport(("8.156.74.79", 22))
+                transport.connect(username="root", password="zfsZBC123.")
+                sftp = paramiko.SFTPClient.from_transport(transport)
+                
+                if sftp is not None:
+                    sftp.put(uploaded_path, remote_path)
+                    sftp.close()
+                if transport is not None:
+                    transport.close()
+                
+                # 生成下载链接
+                download_url = f"http://8.156.74.79:8001/{uploaded_filename}"
+                
+                # 更新结果
+                result['download_url'] = download_url
+                result['uploaded_filename'] = uploaded_filename
+                
+            except Exception as upload_error:
+                logger.error(f"上传文件失败: {upload_error}")
+                result['upload_error'] = str(upload_error)
+        
+        # 格式化返回结果
+        response = {
+            'success': True,
+            'message': result['message'],
+            'total_tables': result['total_tables'],
+            'tables_info': result.get('tables_info', []),
+            'output_file': result.get('output_file', ''),
+            'download_url': result.get('download_url', ''),
+            'uploaded_filename': result.get('uploaded_filename', '')
+        }
+        
+        import json
+        return json.dumps(response, indent=2, default=str, ensure_ascii=False)
+        
+    except Exception as e:
+        logger.error(f"提取文档表格失败: {e}")
+        return f"Error: 提取文档表格失败 - {str(e)}"
+
+@mcp.tool()
+def preview_document_tables(
+    document_url: str,
+    max_tables: int = 3,
+    max_rows_per_table: int = 10
+) -> str:
+    """
+    预览文档中的表格结构，不进行完整提取。
+    
+    【功能说明】
+    - 快速预览文档中的表格数量和基本结构
+    - 返回每个表格的前几行数据作为预览
+    - 适用于在完整提取前了解文档内容
+    
+    【参数说明】
+    - document_url: 文档的URL地址
+    - max_tables: 最大预览表格数量（默认3个）
+    - max_rows_per_table: 每个表格最大预览行数（默认10行）
+    
+    【返回值】
+    - 文档基本信息
+    - 表格预览数据
+    - 建议的提取策略
+    """
+    try:
+        # 验证URL格式
+        if not (document_url.startswith("http://") or document_url.startswith("https://")):
+            return "Error: 请输入有效的http/https链接"
+        
+        # 导入文档提取模块
+        from excel_mcp.document_extractor import DocumentExtractor
+        
+        extractor = DocumentExtractor()
+        
+        # 下载文件
+        temp_file = extractor.download_file(document_url)
+        
+        try:
+            # 确定文件类型
+            file_type = os.path.splitext(temp_file)[1].lower().lstrip('.')
+            
+            # 提取表格
+            tables = extractor.extract_tables_from_document(temp_file, file_type)
+            
+            if not tables:
+                return "未在文档中找到表格"
+            
+            # 限制预览的表格数量
+            preview_tables = tables[:max_tables]
+            
+            # 构建预览结果
+            preview_result = {
+                'document_url': document_url,
+                'file_type': file_type,
+                'total_tables_found': len(tables),
+                'preview_tables_count': len(preview_tables),
+                'tables_preview': []
+            }
+            
+            for i, table_info in enumerate(preview_tables, 1):
+                table_data = table_info['data']
+                
+                # 限制预览行数
+                preview_rows = table_data[:max_rows_per_table]
+                
+                table_preview = {
+                    'table_index': i,
+                    'table_info': {
+                        'total_rows': len(table_data),
+                        'total_columns': len(table_data[0]) if table_data else 0,
+                        'preview_rows': len(preview_rows)
+                    },
+                    'preview_data': preview_rows,
+                    'location': table_info.get('slide', table_info.get('page', table_info.get('table', 'unknown')))
+                }
+                
+                preview_result['tables_preview'].append(table_preview)
+            
+            # 添加建议
+            if len(tables) > max_tables:
+                preview_result['suggestion'] = f"文档中共有{len(tables)}个表格，建议使用extract_tables_from_document进行完整提取"
+            else:
+                preview_result['suggestion'] = "可以使用extract_tables_from_document进行完整提取"
+            
+            import json
+            return json.dumps(preview_result, indent=2, default=str, ensure_ascii=False)
+            
+        finally:
+            # 清理临时文件
+            if temp_file and os.path.exists(temp_file):
+                try:
+                    os.remove(temp_file)
+                except:
+                    pass
+                    
+    except Exception as e:
+        logger.error(f"预览文档表格失败: {e}")
+        return f"Error: 预览文档表格失败 - {str(e)}"
 
 async def run_sse():
     """Run Excel MCP server in SSE mode."""
