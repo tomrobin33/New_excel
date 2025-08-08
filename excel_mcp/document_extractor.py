@@ -72,10 +72,28 @@ class DocumentExtractor:
             if 'filename=' in content_disposition:
                 filename = content_disposition.split('filename=')[1].strip('"')
             else:
-                filename = url.split('/')[-1]
+                # 从URL中提取文件名，去除查询参数
+                filename = url.split('/')[-1].split('?')[0]
             
-            # 创建临时文件
-            temp_file = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4().hex}_{filename}")
+            # 确保文件名不为空且有效
+            if not filename or len(filename) > 100:
+                # 如果文件名过长或为空，使用默认名称
+                filename = "document"
+            
+            # 添加文件扩展名（如果缺失）
+            if '.' not in filename:
+                content_type = response.headers.get('content-type', '').lower()
+                if 'powerpoint' in content_type or 'presentation' in content_type:
+                    filename += '.pptx'
+                elif 'word' in content_type or 'document' in content_type:
+                    filename += '.docx'
+                elif 'pdf' in content_type:
+                    filename += '.pdf'
+                else:
+                    filename += '.tmp'
+            
+            # 创建临时文件，使用短文件名
+            temp_file = os.path.join(tempfile.gettempdir(), f"{uuid.uuid4().hex[:8]}_{filename}")
             
             with open(temp_file, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):
