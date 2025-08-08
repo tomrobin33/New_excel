@@ -60,6 +60,9 @@ class DocumentExtractor:
     def download_file(self, url: str) -> str:
         """从URL下载文件到临时目录"""
         try:
+            # 去除URL末尾的斜杠，避免服务器识别问题
+            url = url.rstrip('/')
+            
             # 确保URL正确编码
             from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
             
@@ -79,12 +82,7 @@ class DocumentExtractor:
             ))
             
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Accept': '*/*',
-                'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-                'Accept-Encoding': 'gzip, deflate',
-                'Connection': 'keep-alive',
-                'Upgrade-Insecure-Requests': '1'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
             
             logger.info(f"尝试下载文件: {clean_url}")
