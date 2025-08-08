@@ -60,11 +60,44 @@ class DocumentExtractor:
     def download_file(self, url: str) -> str:
         """从URL下载文件到临时目录"""
         try:
+            # 确保URL正确编码
+            from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+            
+            # 解析URL并重新编码
+            parsed = urlparse(url)
+            query_params = parse_qs(parsed.query)
+            
+            # 重新构建URL，确保参数正确编码
+            encoded_query = urlencode(query_params, doseq=True)
+            clean_url = urlunparse((
+                parsed.scheme,
+                parsed.netloc,
+                parsed.path,
+                parsed.params,
+                encoded_query,
+                parsed.fragment
+            ))
+            
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': '*/*',
+                'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+                'Accept-Encoding': 'gzip, deflate',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1'
             }
             
-            response = requests.get(url, stream=True, headers=headers, timeout=30)
+            logger.info(f"尝试下载文件: {clean_url}")
+            response = requests.get(clean_url, stream=True, headers=headers, timeout=30, allow_redirects=True)
+            
+            # 详细的错误信息
+            if response.status_code != 200:
+                logger.error(f"HTTP错误: {response.status_code} - {response.reason}")
+                logger.error(f"响应头: {dict(response.headers)}")
+                if response.text:
+                    logger.error(f"响应内容: {response.text[:500]}")
+                raise Exception(f"HTTP {response.status_code}: {response.reason}")
+            
             response.raise_for_status()
             
             # 获取文件扩展名
